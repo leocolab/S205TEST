@@ -91,7 +91,7 @@ def Return():
       laptopDict.pop(email3)
       return "Laptop Returned"
    else:
-      return "Email or code does not match out records"
+      return "Email or code does not match our records"
 
 
 @app.route('/admin', methods = ['POST', 'GET'])
