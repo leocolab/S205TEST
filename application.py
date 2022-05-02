@@ -4,6 +4,21 @@ from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
 import random
 import string
+import csv
+
+def updateSignOuts():
+   with open(os.path.join(sys.path[0], "signout.csv"), 'w') as f:
+      lastSignedOutP = []
+      for i in range(30):
+         lastSignedOutP.append(laptopList)
+
+
+         writer = csv.writer(f)
+         writer.writerows(lastSignedOutP)
+         f.write(entry, lastSignedOut[entry])
+
+
+
 app = Flask(__name__)
 
 codeDict = {}
@@ -65,6 +80,7 @@ def signOut():
       if laptopDict == {}:
          laptopDict.update({email2 : QR})
          lastSignedOut.update({email2: QR}) 
+         updateSignOuts()
       else:
          if QR in laptopDict.values():
             previousUser = list(laptopDict.keys())[list(laptopDict.values()).index(QR)]
@@ -72,9 +88,11 @@ def signOut():
             lastSignedOut.pop(previousUser)
             laptopDict.update({email2 : QR})
             lastSignedOut.update({email2: QR})
+            updateSignOuts()
          else:
             laptopDict.update({email2 : QR})
-            lastSignedOut.update({email2: QR})  
+            lastSignedOut.update({email2: QR})
+            updateSignOuts()  
       return "Laptop Sign Out Success!"
    else:
       return "Error! Email, QR Code, or Verification Code does not match."
@@ -105,6 +123,16 @@ def admin():
       if laptopDict == {}:
          return "No one has signed out a laptop."
       else:
+
+
+         with open(os.path.join(sys.path[0], "signout.csv"), 'r') as f:
+            reader = csv.reader(f)
+            lastSignedOutL = list(reader)
+            lastSignedOut = {}
+            for entry in lastSignedOutL:
+               lastSignedOut[lastSignedOutL[0]] = lastSignedOutL[1]
+
+
          string = ""
          string2 = ""
          for user in lastSignedOut:
