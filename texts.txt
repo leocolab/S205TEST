@@ -1,0 +1,11 @@
+Check your email for your verification code. Then return to the previous page to Login. MAKE SURE TO CHECK YOUR SPAM FOLDER IF IT IS NOT IN YOUR MAIN INBOX.
+Please use a valid HDSB email.
+Laptop signed out successfully!
+Error! Email, QR code, or verification code does not match.
+Laptop successfully returned!
+Email or code does not match our records.
+Nobody has signed out a laptop.
+The inputted code was invalid.
+s205laptops@gmail.com
+ehtiuvauwgfftsht
+1243
