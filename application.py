@@ -1,180 +1,98 @@
-from flask import Flask, request, jsonify, redirect, url_for
-import smtplib
-from email.mime.text import MIMEText
-from email.mime.multipart import MIMEMultipart
-import random
-import string
-import csv
-import os
-import sys
+import React, { Component } from 'react'
+import jsQR from 'jsqr'
 
-app = Flask(__name__)
+const { requestAnimationFrame } = global
 
+class QRScan extends Component {
+  constructor (props) {
+    super(props)
+    this.state = {
+      output: "",
+      notEnabled: true,
+      loading: true,
+      video: null
+    }
+  }
 
-def csvRead(file):
-    with open(os.path.join(sys.path[0], file), 'r') as f:
-        return dict(csv.reader(f))
+  componentDidMount () {
+    const video = document.createElement('video')
+    const canvasElement = document.getElementById('qrCanvas')
+    const canvas = canvasElement.getContext('2d')
 
+    this.setState({ video })
 
-laptop_dict = csvRead('signout.csv')
-lso_dict = csvRead('lastsignedout.csv')  # last signed out dictionary
-code_dict = csvRead('codes.csv')
+    navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' } }).then(function (stream) {
+      video.srcObject = stream
+      video.setAttribute('playsinline', true)
+      video.play()
+      requestAnimationFrame(tick)
+    })
 
-
-def csvWrite(file, x):  # x is the dictionary that is being written to the csv
-    with open(os.path.join(sys.path[0], file), 'w') as f:
-        writer = csv.writer(f)
-        for i in list(x):
-            writer.writerow([i, x[i]])
-
-
-with open(os.path.join(sys.path[0], "texts.txt"), 'r') as f:
-    with f.read().splitlines() as w:
-        m = {
-            'disclaimer': w[0],
-            'nohdsb': w[1],
-            'suc_out': w[2],
-            'err_out': w[3],
-            'suc_in': w[4],
-            'err_in': w[5],
-            'adm_blank': w[6],
-            'adm_inv_code': w[7]
+    const tick = () => {
+      if (this.state.notEnabled) this.setState({ notEnabled: false })
+      if (video.readyState === video.HAVE_ENOUGH_DATA) {
+        if (this.state.loading) this.setState({ loading: false })
+        canvasElement.height = video.videoHeight
+        canvasElement.width = video.videoWidth
+        canvas.drawImage(video, 0, 0, canvasElement.width, canvasElement.height)
+        var imageData = canvas.getImageData(0, 0, canvasElement.width, canvasElement.height)
+        var code = jsQR(imageData.data, imageData.width, imageData.height, {
+          inversionAttempts: 'dontInvert'
+        })
+        if (code) {
+          this.setState({output : code.data})
+          console.log(code.data)
+          this.props.onFind(code.data)
         }
-        sender_address = w[8]
-        sender_password = w[9]
-        admin_code = w[10]
+      }
+      requestAnimationFrame(tick)
+    }
+  }
 
+  componentWillUnmount () {
+    this.state.video.pause()
+  }
 
-def queryDict(x, item):
-    for i in x:
-        if x[i] == item:
-            return i
+  render () {
+    const {output} = this.state
+    let message
+    if (this.state.notEnabled) {
+      message = <div><span role='img' aria-label='camera'>🎥</span> Unable to access video stream (please make sure you have a webcam enabled)</div>
+    } else if (this.state.loading) {
+      message = <div><span role='img' aria-label='time'>⌛</span> Loading video...</div>
+    }
 
+    return (
+      <div>
+        <form action = "http://localhost:5000/login" method = "post">
+          <p> Generate an Email Verification Code </p>
+          <p><input type = "text" name = "nm" placeholder = "Email" style={{width : 200}} required/></p>
+          <p><input type = "submit" value = "submit" /></p>
+        </form>
+        { message }
+        <canvas id='qrCanvas' />
+        <form action = "http://localhost:5000/signOut" method = "post">
+          <p> Sign Out a Laptop </p> 
+          <p><input type = "text" name = "QR" value = {output} placeholder = "Scan Laptop QR Code" required/></p>
+          <p><input type = "text" name = "email" placeholder = "Email" required/></p>
+          <p><input type = "text" name = "code" placeholder = "Email Verification Code" required/></p>
+          <p><input type = "submit" value = "submit" /></p>
+        </form>
+        <form action = "http://localhost:5000/return" method = "post">
+          <p> Return a Laptop </p>
+          <p> <input type = "text" name = "email" placeholder = "Email" /> </p>
+          <p> <input type = "text" name = "code" placeholder = "Email Verification Code" /> </p>
+          <p><input type = "submit" value = "submit" /></p>
+        </form>
+        <form action = "http://localhost:5000/admin" method = "post">
+          <p> Admin </p>
+          <p> <input type = "text" name = "code" placeholder = "Administrator Passcode" /> </p>
+          <p><input type = "submit" value = "submit" /></p>
+        </form>
+        
+      </div>
+    )
+  }
+}
 
-# This is a set because the order of items does not matter, it is only needed to check if an item is in the set
-
-
-def sendEmail(sa, sp, ra, mmo):  # sender address, sender_password, recipient address, MIMEMultipart Object
-    smtp_server = smtplib.SMTP('smtp.gmail.com', 587)  # Opens smtp server on port 587
-    smtp_server.starttls()
-    smtp_server.login(sa, sp)
-    email_object = mmo.as_string()  # Convert MIMEMultipart object to string in order to send
-    smtp_server.sendmail(sa, ra, email_object)
-    smtp_server.quit()
-
-
-@app.route('/login', methods=['POST', 'GET'])
-def login():
-    if request.method == 'POST':
-        recipient_address = request.form['nm']
-    else:
-        recipient_address = request.args.get('nm')
-
-    if recipient_address[-8:] == '@hdsb.ca':  # Checks if last 8 characters if email are "@hdsb.ca"
-        v_code = ''.join(random.choices(string.digits, k=4))
-        email_subject_line = 'TAB Laptops Verification Code'
-        email_body = f'Your Verification Code is {v_code}'
-
-        msg = MIMEMultipart()
-        msg['From'] = sender_address
-        msg['To'] = recipient_address
-        msg['Subject'] = email_subject_line
-
-        # Attach the message to the MIMEMultipart object
-        msg.attach(MIMEText(email_body, 'plain'))
-
-        sendEmail(sender_address, sender_password, recipient_address, msg)
-
-        code_dict[recipient_address] = v_code
-        csvWrite('codes.csv', code_dict)
-        return m['disclaimer']
-    else:
-        return m['nohdsb']
-
-
-@app.route("/signOut", methods=['POST', 'GET'])
-def signOut():
-    if request.method == 'POST':
-        laptop_id = request.form['QR']
-        user_address = request.form['email']
-        uv_code = request.form['code']  # user verification code
-    else:
-        laptop_id = request.args.get('QRoutput')
-        user_address = request.args.get('email')
-        uv_code = request.args.get('form')  # user verification code
-
-    if user_address in code_dict:
-        # Fetches code associated with email from database to compare to user-given code
-        sv_code = code_dict[user_address]
-    else:
-        return m['err_out']
-
-    if sv_code == uv_code and laptop_id in laptop_dict:
-        overwritten_user = laptop_dict[laptop_id]
-
-        # Deletes other users code if somebody overwrites their sign out
-        if overwritten_user != 'empty':
-            code_dict.pop(overwritten_user)
-            csvWrite('codes.csv', code_dict)
-
-        laptop_dict[laptop_id] = user_address
-        lso_dict[laptop_id] = user_address
-        csvWrite("signout.csv", laptop_dict)
-        csvWrite("lastsignedout.csv", lso_dict)
-        return m['suc_out']
-    else:
-        return m['err_out']
-
-
-@app.route('/return', methods=['POST', 'GET'])
-def Return():
-    if request.method == 'POST':
-        user_address = request.form['email']
-        uv_code = request.form['code']
-    else:
-        user_address = request.args.get('email')
-        uv_code = request.args.get('code')
-
-    if user_address in code_dict:
-        # Fetches code associated with email from database to compare to user-given code
-        sv_code = code_dict[user_address]
-    else:
-        return m['err_in']
-
-    if sv_code == uv_code:
-        code_dict.pop(user_address)
-        csvWrite('codes.csv', code_dict)
-
-        laptop_dict[queryDict(laptop_dict, user_address)] = 'empty'
-        # Finds laptop number associated with user and sets
-        # signout user to 'empty', denoting it is not currently signed out
-        csvWrite("signout.csv", laptop_dict)
-        return m['suc_in']
-    else:
-        return m['err_in']
-
-
-@app.route('/admin', methods=['POST', 'GET'])
-def admin():
-    if request.method == 'POST':
-        ua_code = request.form['code']  # user inputted admin code
-    else:
-        ua_code = request.args.get['code']
-
-    if ua_code == admin_code:
-        cso_string = ""
-        lso_string = ""
-
-        for laptop in laptop_dict:
-            user = laptop_dict[laptop]
-            cso_string += f'<br>{user} signed out: {laptop}'
-
-        for laptop in lso_dict:
-            user = lso_dict[laptop]
-            lso_string += f'<br>{user} signed out: {laptop}'
-
-        return f'Computers currently signed out: {cso_string}<br><br>Last users to sign out each laptop: {lso_string}'
-
-
-if __name__ == "__main__":
-    app.run(debug=True)
+export default QRScan
