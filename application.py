@@ -1,9 +1,3 @@
-from flask import Flask, request, jsonify, redirect, url_for
-import smtplib
-from email.mime.text import MIMEText
-from email.mime.multipart import MIMEMultipart
-import random
-import string
 import csv
 import os
 import sys
@@ -13,7 +7,12 @@ app = Flask(__name__)
 
 def csvRead(file):
     with open(os.path.join(sys.path[0], file), 'r') as f:
-        return dict(csv.reader(f))
+         csv_as_list = list(csv.reader(f))
+         csv_as_dict = {}
+         for line in csv_as_list:
+            if len(line) == 2:
+                  csv_as_dict[line[0]] = line[1]
+         return csv_as_dict
 
 
 laptop_dict = csvRead('signout.csv')
